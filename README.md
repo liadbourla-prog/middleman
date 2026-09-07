@@ -4,15 +4,14 @@
 
 Every business gets one dedicated WhatsApp number. Customers book, reschedule and ask questions there; the owner runs the business from the same place, in plain language. No app to install, no dashboard to learn, no new habit to form — for either side.
 
-Live in production on Google Cloud Run (`europe-west3`), serving real businesses on real WhatsApp numbers. `v1.0.243`, 2,040 commits since April 2026.
+Live in production on Google Cloud Run, serving businesses on WhatsApp numbers. 
 
-> **This page is the write-up; the code is in a private repository.** Why, and how to get access, is at the bottom.
-
+> **This page is the write-up; the code is in a private repository.** 
 ---
 
 ## The problem this is built around
 
-Booking is an unforgiving domain for a language model. A double-booked slot, a session moved to the wrong hour, or the sentence *"you're all set for Tuesday at 6"* when nothing was ever written — each is a real customer standing at a locked door. The failure isn't embarrassing, it's material.
+Booking is an unforgiving domain for a language model. A double-booked slot, a session moved to the wrong hour, or the sentence *"you're all set for Tuesday at 6"* when nothing was ever written — each is a real customer standing at a locked door. The failure isn't embarrassing, it's material, and devastating for an SMB owner.
 
 But the model is also the entire interface. There is no form to fall back on, no dropdown that constrains input to something valid. Someone types *"can we push my Tuesday to later in the week, and does my sister need her own booking?"* and the system has to be right.
 
@@ -109,7 +108,7 @@ Not every business wants the PA to own its calendar. The difference is a column 
 
 **1. Booking — the full product.** The PA owns the calendar end-to-end: availability, holds, bookings, reschedules, waitlists, memberships and payments all live in the internal record, with Google Calendar as the mirror. These businesses also get **web surfaces that mirror the PA rather than reimplement it** — an owner PWA (`/app`: calendar, bookings, memberships, payments, config, conversations) and a per-tenant customer web app. The owner app is Branch 3 with a different skin over the identical engine, so a capability added to the manager orchestrator appears in the app without being built twice. That coherence is the point: there is no second definition of what a booking is.
 
-**2. External registration — businesses already on another platform.** Studios and gyms running something like Arbox already have a booking system nobody intends to replace. Here the PA runs the conversation — answering, qualifying, explaining the schedule — and the booking engine is *explicitly forbidden from writing*: `isExternalRegistrationOnly` gates the service, the engine refuses the write with `external_registration_required`, and the PA relays the operator's registration URL, reproduced verbatim from a grounded fact rather than paraphrased into prose. It is double-gated — a business-level flag plus a per-service URL, both inert by default — so the exception can never become an accidental default. **Today this is a hand-off, not an API-level write into the operator's system.** Integrating at the API level is the natural next step, and the refusal gate is precisely what makes it a safe one: the path that must not silently half-book is already closed.
+**2. External registration — businesses already on another platform.** Studios and gyms running on an existing platform (aka Arbox) already have a booking system nobody intends to replace. Here the PA runs the conversation — answering, qualifying, explaining the schedule — and the booking engine is *explicitly forbidden from writing*: `isExternalRegistrationOnly` gates the service, the engine refuses the write with `external_registration_required`, and the PA relays the operator's registration URL, reproduced verbatim from a grounded fact rather than paraphrased into prose. It is double-gated — a business-level flag plus a per-service URL, both inert by default — so the exception can never become an accidental default. **Today this is a hand-off, not an API-level write into the operator's system.** Integrating at the API level is the natural next step, and the refusal gate is precisely what makes it a safe one: the path that must not silently half-book is already closed.
 
 **3. Conversational — larger organisations, where we deliberately do not book.** Theatres, cultural institutions and similar bodies have large catalogues, high question volume, and ticketing they will not migrate. `pa_product = 'conversational'` routes the turn to a separate flow that answers from a curated knowledge base and never reaches the booking engine at all. The interesting constraint is that it has no calendar to be grounded against, so grounding shifts entirely to the facts block — and notably, **no URL ever enters through the situation string**, only as a grounded fact reproduced verbatim, because a link asserted in prose is a link the model can quietly paraphrase into a wrong one.
 
@@ -183,18 +182,10 @@ tests/         Six tiers, including the red-test quarantine
 **Where to start reading:**
 `ARCHITECTURE.md` Part 16 for the four channels · `src/adapters/llm/orchestrator.ts` for the manager tool surface · `src/domain/grounding/` for the mechanism that makes fabrication unwritable · `docs/STATE.md` for exactly what is and isn't working right now.
 
----
-
-## Honest scope
-
-The state doc keeps an open known-issues register rather than a highlight reel, and I'd rather you read it than not. As of this writing: the customer-facing web app is shipped but deliberately inert pending wildcard DNS; the concurrency test tier is red on three known waitlist races; a whole-repo lint pass is unusable locally because of a config gap. These are tracked, reproducible, and prioritised — listed here because a README that claims everything is green is the same failure mode this whole system is built to prevent.
 
 ---
 
 ## Reading the code
 
-The implementation lives in a private repository, **`MiddleMan1`**. It is private for a specific reason rather than a coy one: it holds production configuration and the real business and customer data of the companies currently running on it, and that isn't mine to publish.
-
-The write-up above is the honest shape of it. If you want to read the actual code — the grounding gate, the orchestrator, the test tiers, or anything else — just ask and I'll send you an invite the same day. No NDA, no forms.
-
+The implementation lives in a private repository, **`MiddleMan1`**. It is private. Happy to share it for reading!
 **Liad Bourla** · [liadbourla@gmail.com](mailto:liadbourla@gmail.com)
