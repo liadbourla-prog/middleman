@@ -36,7 +36,21 @@ identity → authorization → scheduling logic → calendar validation → safe
 
 No caller may skip a step. Availability is computed by the engine, never by the model. A failed write is never reported as a success; partial state is rolled back or explicitly flagged.
 
-**3. Outcome sentences are rendered, not written.** This is the load-bearing one. After the core acts, it emits a structured result, and the customer-facing sentence is *composed from that result*. The model chooses wording and register; it is never handed a blank page on which it could claim an outcome. **A false claim about system state is unwritable, rather than detected after the fact.** See `src/domain/grounding/` and `docs/standards/ACTION_GROUNDING_SPEC.md`.
+**3. Outcome sentences are rendered, not written.** This is the load-bearing one, so here is the actual mechanism rather than the claim.
+
+The executor that did the work emits an `Outcome` record — never the model, never a prompt. It carries a completeness dimension (`written` / `missing` / `assumed`), because a write is often partial by design: create a customer from a name alone and the service duration comes from a column default the owner never gave. Without `assumed`, a correct-looking confirmation would report a value nobody supplied.
+
+The model is then asked for a reply in three parts:
+
+```
+{ prose_before?, outcome_ref?, prose_after? }
+```
+
+It decides **whether** to mention the outcome and **where** the sentence sits. **The system supplies the words.** `outcome_ref` can be a list, because one turn can book some occurrences, hold others, waitlist a third and skip a fourth — no single fixed sentence expresses that, and the model shouldn't be inventing one.
+
+The result is that "you're confirmed for Tuesday at 18:00" is not a sentence the model is capable of composing. It can only point at an outcome the core actually produced. **The false claim is unwritable, rather than detected after the fact.**
+
+See `src/domain/grounding/` and `docs/standards/ACTION_GROUNDING_SPEC.md`.
 
 **4. Static facts go in the prompt; volatile state comes from tools, always fresh.** Services, hours, prices and policies are cheap and cached. Bookings, capacity and calendar state change between prompt assembly and the model's answer, so they are never answered from a snapshot.
 
@@ -85,7 +99,21 @@ Every inbound message routes into **exactly one of four channels**, and any work
 | **B3** | Manager | a verified owner | Gemini native function calling over 64 tools — calendar, CRM, payments, memberships, broadcasts, site generation |
 | **B4** | Customer | anyone booking | Two layers: transactional replies are *phrased* by the model from a sanitised situation string; conversational ones reason freely over business facts |
 
-Web and app surfaces mirror these same channels off WhatsApp rather than forking the logic — the owner PWA is B3 with a different skin, over the identical brain.
+Web and app surfaces mirror these channels rather than forking the logic — how far that goes depends on which of the three products a business is on.
+
+---
+
+## Three products, one engine
+
+Not every business wants the PA to own its calendar. The difference is a column (`businesses.pa_product`) and a gate — never a fork of the codebase.
+
+**1. Booking — the full product.** The PA owns the calendar end-to-end: availability, holds, bookings, reschedules, waitlists, memberships and payments all live in the internal record, with Google Calendar as the mirror. These businesses also get **web surfaces that mirror the PA rather than reimplement it** — an owner PWA (`/app`: calendar, bookings, memberships, payments, config, conversations) and a per-tenant customer web app. The owner app is Branch 3 with a different skin over the identical engine, so a capability added to the manager orchestrator appears in the app without being built twice. That coherence is the point: there is no second definition of what a booking is.
+
+**2. External registration — businesses already on another platform.** Studios and gyms running something like Arbox already have a booking system nobody intends to replace. Here the PA runs the conversation — answering, qualifying, explaining the schedule — and the booking engine is *explicitly forbidden from writing*: `isExternalRegistrationOnly` gates the service, the engine refuses the write with `external_registration_required`, and the PA relays the operator's registration URL, reproduced verbatim from a grounded fact rather than paraphrased into prose. It is double-gated — a business-level flag plus a per-service URL, both inert by default — so the exception can never become an accidental default. **Today this is a hand-off, not an API-level write into the operator's system.** Integrating at the API level is the natural next step, and the refusal gate is precisely what makes it a safe one: the path that must not silently half-book is already closed.
+
+**3. Conversational — larger organisations, where we deliberately do not book.** Theatres, cultural institutions and similar bodies have large catalogues, high question volume, and ticketing they will not migrate. `pa_product = 'conversational'` routes the turn to a separate flow that answers from a curated knowledge base and never reaches the booking engine at all. The interesting constraint is that it has no calendar to be grounded against, so grounding shifts entirely to the facts block — and notably, **no URL ever enters through the situation string**, only as a grounded fact reproduced verbatim, because a link asserted in prose is a link the model can quietly paraphrase into a wrong one.
+
+One engine, three postures. What changes between them is not the logic but **what the PA is permitted to do** — and in two of the three, the most important thing it does is refuse.
 
 ---
 
